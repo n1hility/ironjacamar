@@ -58,11 +58,14 @@ public class TransactionSynchronizer implements Synchronization
    private static CoreLogger log = Logger.getMessageLogger(CoreLogger.class, TransactionSynchronizer.class.getName());
 
    /** The records */
-   private static ConcurrentMap<Transaction, Record> records =
-      new ConcurrentHashMap<Transaction, Record>();
+   private static BogusKeyConcurrentMap<Transaction, Record> records =
+      new BogusKeyConcurrentMap<Transaction, Record>();
    
    /** The transaction */
    private Transaction tx;
+
+   /** Saved hash for cleaning up dead keys */
+   private int txHash;
    
    /** The enlisting thread */
    private Thread enlistingThread;
@@ -84,6 +87,7 @@ public class TransactionSynchronizer implements Synchronization
    private TransactionSynchronizer(Transaction tx)
    {
       this.tx = tx;
+      this.txHash = tx.hashCode();
    }
    
    /**
@@ -335,14 +339,8 @@ public class TransactionSynchronizer implements Synchronization
          invokeAfter(ccmSynch, status);  
       }
 
-      // Cleanup the maps
-      Iterator<Entry<Transaction, Record>> iterator = records.entrySet().iterator();
-       while (iterator.hasNext()) {
-           Entry<Transaction, Record> next = iterator.next();
-           if (next.getValue().getTransactionSynchronizer().equals(this)) {
-               iterator.remove();
-           }
-       }
+      // Cleanup the map
+      records.removeDeadKey(txHash, tx);
    }
 
    /**
